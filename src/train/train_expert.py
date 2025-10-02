@@ -9,9 +9,21 @@ from pathlib import Path
 from tqdm import tqdm
 import sys
 
-# Make RIDE code importable
-_ride_root = Path(__file__).resolve().parents[2] / 'RIDE-LongTailRecognition'
-sys.path.append(str(_ride_root))
+# Make RIDE code importable (robust across environments)
+_here = Path(__file__).resolve()
+_candidates = [
+    _here.parents[2] / 'RIDE-LongTailRecognition',
+    _here.parents[1] / 'RIDE-LongTailRecognition',
+    Path.cwd() / 'RIDE-LongTailRecognition'
+]
+_ride_root = None
+for c in _candidates:
+    if (c / 'train.py').exists() and (c / 'model').exists():
+        _ride_root = c
+        break
+if _ride_root is None:
+    raise ModuleNotFoundError("Could not locate RIDE-LongTailRecognition. Expected at one of: " + ", ".join(str(p) for p in _candidates))
+sys.path.insert(0, str(_ride_root))
 
 # RIDE imports (now from RIDE repository root)
 from model.model import ResNet32Model
@@ -26,7 +38,7 @@ CONFIG = {
         'num_classes': 100,
     },
     'ride': {
-        'config_path': 'RIDE-LongTailRecognition/configs/config_imbalance_cifar100_ride.json',
+        'config_path': str((_ride_root / 'configs' / 'config_imbalance_cifar100_ride.json').as_posix()),
         'num_experts': 3,
         'reduce_dimension': 1
     },
@@ -35,7 +47,7 @@ CONFIG = {
     },
     'output': {
         'logits_dir': './outputs/logits',
-        'ride_save_root': 'RIDE-LongTailRecognition/saved/models'
+        'ride_save_root': str((_ride_root / 'saved' / 'models').as_posix())
     },
     'seed': 42
 }
@@ -46,7 +58,7 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 def _run_ride_training():
     """Invoke official RIDE trainer with the CIFAR100-LT config and 3 experts."""
     cmd = [
-        'python', 'RIDE-LongTailRecognition/train.py',
+        sys.executable, str((_ride_root / 'train.py').as_posix()),
         '-c', CONFIG['ride']['config_path'],
         '--reduce_dimension', str(CONFIG['ride']['reduce_dimension']),
         '--num_experts', str(CONFIG['ride']['num_experts'])
