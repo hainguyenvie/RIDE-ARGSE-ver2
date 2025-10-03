@@ -64,7 +64,23 @@ def _run_ride_training():
         '--num_experts', str(CONFIG['ride']['num_experts'])
     ]
     print('Running:', ' '.join(cmd))
-    subprocess.run(cmd, check=True)
+    print("🚀 Starting RIDE training... This may take a while (200 epochs).")
+    print("📊 Training progress will be shown below:")
+    print("-" * 60)
+    
+    # Run with real-time output
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                              universal_newlines=True, bufsize=1)
+    
+    for line in process.stdout:
+        print(line.rstrip())
+    
+    process.wait()
+    if process.returncode != 0:
+        raise subprocess.CalledProcessError(process.returncode, cmd)
+    
+    print("-" * 60)
+    print("✅ RIDE training completed!")
 
 
 def _find_latest_ride_best_checkpoint() -> Path:
@@ -94,12 +110,12 @@ def _load_ride_weights(model: torch.nn.Module, ckpt_path: Path):
 def _export_ride_logits(model: torch.nn.Module, expert_names, num_experts: int):
     model = model.to(DEVICE)
     model.eval()
-
+    
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
     ])
-
+    
     splits_dir = Path(CONFIG['dataset']['splits_dir'])
     splits_info = [
         {'name': 'train', 'dataset_type': 'train', 'file': 'train_indices.json'},
@@ -107,22 +123,22 @@ def _export_ride_logits(model: torch.nn.Module, expert_names, num_experts: int):
         {'name': 'val_lt', 'dataset_type': 'test', 'file': 'val_lt_indices.json'},
         {'name': 'test_lt', 'dataset_type': 'test', 'file': 'test_lt_indices.json'},
     ]
-
+    
     for split_info in splits_info:
         indices_path = splits_dir / split_info['file']
         if not indices_path.exists():
             print(f"  Warning: {indices_path.name} not found, skipping {split_info['name']}")
             continue
-
+            
         if split_info['dataset_type'] == 'train':
             base_dataset = torchvision.datasets.CIFAR100(root=CONFIG['dataset']['data_root'], train=True, transform=transform)
         else:
             base_dataset = torchvision.datasets.CIFAR100(root=CONFIG['dataset']['data_root'], train=False, transform=transform)
-
+        
         indices = json.loads(indices_path.read_text())
         subset = Subset(base_dataset, indices)
         loader = DataLoader(subset, batch_size=512, shuffle=False, num_workers=4)
-
+        
         # Collect per-expert logits
         collected = [list() for _ in range(num_experts)]
         with torch.no_grad():

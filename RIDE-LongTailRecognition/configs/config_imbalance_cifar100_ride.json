@@ -55,7 +55,7 @@
 
         "save_dir": "saved/",
         "save_period": 40,
-        "verbosity": 2,
+        "verbosity": 3,
         
         "monitor": "max val_accuracy",
         "tensorboard": false
